@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>命盤 AI — 決策顧問</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;600;700&family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1a2e;
+    --gold: #c9a84c;
+    --gold-light: #e8d5a3;
+    --red: #8b1a1a;
+    --paper: #faf7f2;
+    --paper-dark: #f0ebe0;
+    --mist: #e8e0d0;
+    --accent: #2e4a7a;
+    --text: #2a2a2a;
+    --text-muted: #666;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans TC', sans-serif;
+    background: var(--paper);
+    color: var(--text);
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* Background texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: 
+      radial-gradient(ellipse at 20% 10%, rgba(201,168,76,0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 90%, rgba(46,74,122,0.06) 0%, transparent 50%),
+      url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0 L30 60 M0 30 L60 30' stroke='%23c9a84c' stroke-width='0.2' opacity='0.15'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 0 20px 60px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  header {
+    text-align: center;
+    padding: 48px 0 36px;
+    border-bottom: 1px solid var(--mist);
+    margin-bottom: 36px;
+    position: relative;
+  }
+
+  .trigram {
+    font-size: 48px;
+    line-height: 1;
+    margin-bottom: 12px;
+    display: block;
+    animation: float 4s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+
+  header h1 {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: 6px;
+  }
+
+  header p {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 8px;
+    letter-spacing: 2px;
+  }
+
+  .gold-line {
+    width: 60px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    margin: 16px auto 0;
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 28px;
+    border: 1px solid var(--mist);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 12px;
+    text-align: center;
+    font-size: 14px;
+    cursor: pointer;
+    background: white;
+    color: var(--text-muted);
+    border: none;
+    font-family: 'Noto Sans TC', sans-serif;
+    transition: all 0.2s;
+    letter-spacing: 1px;
+    position: relative;
+  }
+
+  .tab.active {
+    background: var(--ink);
+    color: var(--gold);
+    font-weight: 500;
+  }
+
+  .tab:not(:last-child) {
+    border-right: 1px solid var(--mist);
+  }
+
+  /* Steps */
+  .step {
+    margin-bottom: 28px;
+    animation: fadeIn 0.4s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .step-num {
+    width: 26px;
+    height: 26px;
+    background: var(--ink);
+    color: var(--gold);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-family: 'Noto Serif TC', serif;
+    flex-shrink: 0;
+  }
+
+  .step-title {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: 1px;
+  }
+
+  .step-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-left: auto;
+  }
+
+  /* Form elements */
+  .field-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .field-group.three {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .field.full { grid-column: 1 / -1; }
+
+  label {
+    font-size: 12px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+  }
+
+  input, select, textarea {
+    font-family: 'Noto Sans TC', sans-serif;
+    font-size: 14px;
+    padding: 10px 12px;
+    border: 1px solid var(--mist);
+    background: white;
+    color: var(--text);
+    border-radius: 2px;
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--gold);
+  }
+
+  textarea {
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.6;
+  }
+
+  textarea.tall { min-height: 120px; }
+
+  select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23999' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+  }
+
+  /* Divider */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--mist);
+    margin: 24px 0;
+  }
+
+  /* Info box */
+  .info-box {
+    background: linear-gradient(135deg, #f5f0e8, #ede5d5);
+    border-left: 3px solid var(--gold);
+    padding: 14px 16px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+    border-radius: 0 2px 2px 0;
+  }
+
+  .info-box strong {
+    color: var(--ink);
+    display: block;
+    margin-bottom: 4px;
+    font-size: 13px;
+  }
+
+  .info-box a {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(46,74,122,0.3);
+  }
+
+  /* Generate button */
+  .btn-generate {
+    width: 100%;
+    padding: 16px;
+    background: var(--ink);
+    color: var(--gold);
+    border: none;
+    font-family: 'Noto Serif TC', serif;
+    font-size: 16px;
+    letter-spacing: 4px;
+    cursor: pointer;
+    transition: all 0.25s;
+    margin-top: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-generate::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, transparent 40%, rgba(201,168,76,0.1));
+    opacity: 0;
+    transition: opacity 0.25s;
+  }
+
+  .btn-generate:hover::before { opacity: 1; }
+  .btn-generate:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(26,26,46,0.2); }
+  .btn-generate:active { transform: translateY(0); }
+
+  /* Result area */
+  .result-section {
+    display: none;
+    margin-top: 32px;
+    animation: fadeIn 0.5s ease;
+  }
+
+  .result-section.show { display: block; }
+
+  .result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .result-title {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 15px;
+    color: var(--ink);
+    letter-spacing: 2px;
+  }
+
+  .result-box {
+    background: white;
+    border: 1px solid var(--mist);
+    border-top: 3px solid var(--ink);
+    padding: 20px;
+    font-size: 13px;
+    line-height: 1.9;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 480px;
+    overflow-y: auto;
+    font-family: 'Noto Sans TC', sans-serif;
+  }
+
+  .result-box::-webkit-scrollbar { width: 4px; }
+  .result-box::-webkit-scrollbar-track { background: var(--paper); }
+  .result-box::-webkit-scrollbar-thumb { background: var(--mist); }
+
+  .btn-copy {
+    padding: 8px 18px;
+    background: white;
+    color: var(--ink);
+    border: 1px solid var(--ink);
+    font-family: 'Noto Sans TC', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 1px;
+  }
+
+  .btn-copy:hover { background: var(--ink); color: var(--gold); }
+  .btn-copy.copied { background: var(--accent); color: white; border-color: var(--accent); }
+
+  .redirect-hint {
+    margin-top: 14px;
+    padding: 14px 16px;
+    background: #f0f4ff;
+    border: 1px solid #c5d0f0;
+    border-radius: 2px;
+    font-size: 13px;
+    color: var(--accent);
+    line-height: 1.7;
+    text-align: center;
+  }
+
+  .redirect-hint a {
+    color: var(--accent);
+    font-weight: 500;
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+  }
+
+  /* Mode panel */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* Inline tags */
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    background: var(--paper-dark);
+    border: 1px solid var(--mist);
+    font-size: 11px;
+    color: var(--text-muted);
+    border-radius: 2px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  .tag.rec { background: #fff8e8; border-color: var(--gold-light); color: #8a6a00; }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: 32px 0 0;
+    border-top: 1px solid var(--mist);
+    margin-top: 48px;
+    font-size: 12px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <span class="trigram">☯</span>
+    <h1>命盤 AI</h1>
+    <p>決策情境分析工具</p>
+    <div class="gold-line"></div>
+  </header>
+
+  <!-- STEP 1: Profile -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">一</div>
+      <div class="step-title">建立命主檔案 <span class="tag">一次設定，永久使用</span></div>
+    </div>
+
+    <div class="info-box">
+      <strong>📋 如何取得命盤資料？</strong>
+      請先前往免費排盤網站取得資料，再填入以下欄位：<br>
+      八字：<a href="https://www.bazi.com.tw" target="_blank">bazi.com.tw</a> 或搜尋「免費八字排盤」<br>
+      紫微斗數：搜尋「紫微斗數免費排盤」<br>
+      西洋星盤：<a href="https://astro.com" target="_blank">astro.com</a>（最準確）
+    </div>
+
+    <div class="field-group">
+      <div class="field">
+        <label>姓名／稱呼</label>
+        <input type="text" id="name" placeholder="命主稱呼（可匿名）">
+      </div>
+      <div class="field">
+        <label>性別</label>
+        <select id="gender">
+          <option value="">請選擇</option>
+          <option value="男命">男命</option>
+          <option value="女命">女命</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field-group three">
+      <div class="field">
+        <label>出生年</label>
+        <input type="text" id="birth-year" placeholder="例：1990">
+      </div>
+      <div class="field">
+        <label>出生月日</label>
+        <input type="text" id="birth-date" placeholder="例：0715">
+      </div>
+      <div class="field">
+        <label>出生時辰</label>
+        <select id="birth-hour">
+          <option value="">不確定</option>
+          <option value="子時（23-01時）">子時 23-01時</option>
+          <option value="丑時（01-03時）">丑時 01-03時</option>
+          <option value="寅時（03-05時）">寅時 03-05時</option>
+          <option value="卯時（05-07時）">卯時 05-07時</option>
+          <option value="辰時（07-09時）">辰時 07-09時</option>
+          <option value="巳時（09-11時）">巳時 09-11時</option>
+          <option value="午時（11-13時）">午時 11-13時</option>
+          <option value="未時（13-15時）">未時 13-15時</option>
+          <option value="申時（15-17時）">申時 15-17時</option>
+          <option value="酉時（17-19時）">酉時 17-19時</option>
+          <option value="戌時（19-21時）">戌時 19-21時</option>
+          <option value="亥時（21-23時）">亥時 21-23時</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <div class="field full">
+        <label>八字（從排盤網站複製）</label>
+        <input type="text" id="bazi" placeholder="例：庚午 癸卯 甲子 壬申">
+      </div>
+    </div>
+
+    <div class="field-group">
+      <div class="field full">
+        <label>紫微斗數主星（選填）</label>
+        <input type="text" id="ziwei" placeholder="例：命宮天同、遷移宮紫微…">
+      </div>
+    </div>
+
+    <div class="field-group">
+      <div class="field full">
+        <label>西洋星盤重點（選填）</label>
+        <input type="text" id="astro" placeholder="例：太陽天蠍、月亮雙魚、上升射手…">
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- STEP 2: Situation -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">二</div>
+      <div class="step-title">描述當前情境</div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('simple')">簡易版</button>
+      <button class="tab" onclick="switchTab('detail')">細說版 <span class="tag rec">建議</span></button>
+    </div>
+
+    <!-- Simple mode -->
+    <div id="panel-simple" class="panel active">
+      <div class="field">
+        <label>直接描述你目前的情況與問題</label>
+        <textarea class="tall" id="simple-input" placeholder="例：獵頭給了我一個高薪 Offer，要跳去競爭對手，薪水多三成，但我對新公司不熟。我現在很猶豫，不知道該不該去。"></textarea>
+      </div>
+    </div>
+
+    <!-- Detail mode -->
+    <div id="panel-detail" class="panel">
+      <div class="field-group">
+        <div class="field full">
+          <label>人 — 涉及哪些人？</label>
+          <input type="text" id="d-who" placeholder="例：我、獵頭、現任老闆、新公司主管">
+        </div>
+      </div>
+      <div class="field-group">
+        <div class="field full">
+          <label>事 — 發生了什麼事？你在考慮做什麼？</label>
+          <textarea id="d-what" placeholder="例：獵頭給了一個 Offer，薪水多三成，要我跳槽去競爭對手，需要在本週內決定"></textarea>
+        </div>
+      </div>
+      <div class="field-group">
+        <div class="field">
+          <label>時 — 目前時間</label>
+          <input type="text" id="d-when" placeholder="例：2026年4月">
+        </div>
+        <div class="field">
+          <label>地 — 地點／環境背景</label>
+          <input type="text" id="d-where" placeholder="例：台北，科技業">
+        </div>
+      </div>
+      <div class="field-group">
+        <div class="field full">
+          <label>心情／衝動 — 你內心真實的狀態</label>
+          <textarea id="d-mood" placeholder="例：薪資誘因很大，有點心動，但理智上擔心新環境人際複雜，也怕現公司報復。整體上六成想去、四成猶豫。"></textarea>
+        </div>
+      </div>
+      <div class="field-group">
+        <div class="field full">
+          <label>補充 — 其他你覺得重要的背景（選填）</label>
+          <input type="text" id="d-extra" placeholder="例：我在現公司待了三年，與老闆關係還算不錯">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- STEP 3: Focus -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">三</div>
+      <div class="step-title">分析重點</div>
+    </div>
+    <div class="field-group">
+      <div class="field">
+        <label>主要類別</label>
+        <select id="category">
+          <option value="事業與職涯">事業與職涯</option>
+          <option value="感情與婚姻">感情與婚姻</option>
+          <option value="財務與投資">財務與投資</option>
+          <option value="人際與家庭">人際與家庭</option>
+          <option value="健康">健康</option>
+          <option value="綜合決策">綜合決策</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>你最想知道的</label>
+        <input type="text" id="question" placeholder="例：這個時機適合跳槽嗎？">
+      </div>
+    </div>
+  </div>
+
+  <button class="btn-generate" onclick="generate()">生 成 分 析 指 令</button>
+
+  <!-- Result -->
+  <div class="result-section" id="result-section">
+    <div class="result-header">
+      <div class="result-title">✦ 已生成，複製後貼至 ChatGPT 或 Claude</div>
+      <button class="btn-copy" id="copy-btn" onclick="copyPrompt()">複製全文</button>
+    </div>
+    <div class="result-box" id="result-box"></div>
+    <div class="redirect-hint">
+      複製後，前往
+      <a href="https://chat.openai.com" target="_blank">ChatGPT</a> 或
+      <a href="https://claude.ai" target="_blank">Claude</a>
+      開啟新對話，直接貼上即可獲得命盤分析。
+    </div>
+  </div>
+
+  <footer>
+    命盤 AI · MingPan AI<br>
+    命理為輔助參考，最終決策責任在於命主本人
+  </footer>
+</div>
+
+<script>
+  let currentTab = 'simple';
+
+  function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.tab').forEach((t, i) => {
+      t.classList.toggle('active', (i === 0 && tab === 'simple') || (i === 1 && tab === 'detail'));
+    });
+    document.getElementById('panel-simple').classList.toggle('active', tab === 'simple');
+    document.getElementById('panel-detail').classList.toggle('active', tab === 'detail');
+  }
+
+  function val(id) {
+    return (document.getElementById(id)?.value || '').trim();
+  }
+
+  function generate() {
+    const name = val('name') || '命主';
+    const gender = val('gender') || '未填';
+    const birthYear = val('birth-year');
+    const birthDate = val('birth-date');
+    const birthHour = val('birth-hour') || '不確定';
+    const bazi = val('bazi');
+    const ziwei = val('ziwei');
+    const astro = val('astro');
+    const category = val('category');
+    const question = val('question');
+
+    if (!birthYear || !bazi) {
+      alert('請至少填入出生年份與八字資料');
+      return;
+    }
+
+    let situation = '';
+    if (currentTab === 'simple') {
+      situation = val('simple-input');
+      if (!situation) { alert('請描述當前情境'); return; }
+    } else {
+      const who = val('d-who');
+      const what = val('d-what');
+      const when = val('d-when');
+      const where = val('d-where');
+      const mood = val('d-mood');
+      const extra = val('d-extra');
+      if (!what) { alert('請填寫「事」的欄位'); return; }
+      situation = '';
+      if (who) situation += `【人】${who}\n`;
+      if (what) situation += `【事】${what}\n`;
+      if (when) situation += `【時】${when}\n`;
+      if (where) situation += `【地】${where}\n`;
+      if (mood) situation += `【心情／衝動】${mood}\n`;
+      if (extra) situation += `【補充】${extra}\n`;
+    }
+
+    const lines = [];
+    lines.push(`你是一位精通八字、紫微斗數與西洋星盤的命理顧問，同時具備心理學與決策分析的背景。`);
+    lines.push(`請根據以下命主資料與當前情境，提供具體、務實的決策建議。`);
+    lines.push(``);
+    lines.push(`═══════════════════════════════`);
+    lines.push(`【命主基本資料】`);
+    lines.push(`═══════════════════════════════`);
+    lines.push(`稱呼：${name}`);
+    lines.push(`性別：${gender}`);
+    lines.push(`出生：${birthYear}年 ${birthDate ? birthDate.slice(0,2)+'月'+birthDate.slice(2)+'日' : ''} ${birthHour}`);
+    lines.push(`八字：${bazi}`);
+    if (ziwei) lines.push(`紫微斗數：${ziwei}`);
+    if (astro) lines.push(`西洋星盤：${astro}`);
+    lines.push(``);
+    lines.push(`═══════════════════════════════`);
+    lines.push(`【當前情境】`);
+    lines.push(`═══════════════════════════════`);
+    lines.push(situation.trim());
+    lines.push(``);
+    lines.push(`═══════════════════════════════`);
+    lines.push(`【分析重點】`);
+    lines.push(`═══════════════════════════════`);
+    lines.push(`類別：${category}`);
+    if (question) lines.push(`核心問題：${question}`);
+    lines.push(``);
+    lines.push(`═══════════════════════════════`);
+    lines.push(`【請依以下結構回應】`);
+    lines.push(`═══════════════════════════════`);
+    lines.push(`1. 命主性格分析（根據八字）`);
+    lines.push(`   → 與本次決策最相關的性格特質與盲點`);
+    lines.push(``);
+    lines.push(`2. 當前運勢判斷`);
+    lines.push(`   → 流年、流月對本類別（${category}）的影響`);
+    lines.push(`   → 目前時機是積極出擊還是穩守為宜`);
+    lines.push(``);
+    lines.push(`3. 情境交叉分析`);
+    lines.push(`   → 結合命盤與當前情境，分析此決策的命理支持度`);
+    lines.push(`   → 潛在風險點與注意事項`);
+    lines.push(``);
+    lines.push(`4. 具體建議`);
+    lines.push(`   → 直接回答：建議做 / 不做 / 如何做`);
+    lines.push(`   → 若有時機窗口，請說明最佳時間點`);
+    lines.push(``);
+    lines.push(`請以繁體中文回覆，語氣務實直接，避免模糊的泛泛而論。`);
+    lines.push(`命理分析作為參考依據，最終決策責任在命主本人。`);
+
+    const prompt = lines.join('\n');
+    document.getElementById('result-box').textContent = prompt;
+    document.getElementById('result-section').classList.add('show');
+    document.getElementById('copy-btn').textContent = '複製全文';
+    document.getElementById('copy-btn').classList.remove('copied');
+
+    setTimeout(() => {
+      document.getElementById('result-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  }
+
+  function copyPrompt() {
+    const text = document.getElementById('result-box').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.getElementById('copy-btn');
+      btn.textContent = '✓ 已複製';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = '複製全文';
+        btn.classList.remove('copied');
+      }, 2500);
+    });
+  }
+</script>
+</body>
+</html>
